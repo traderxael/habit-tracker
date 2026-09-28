@@ -1,3 +1,5 @@
+import "./helpers.js";
+import { createCtx } from "./helpers.js";
 import { describe, expect, it } from "vitest";
 import { db } from "../db.js";
 
@@ -22,11 +24,14 @@ describe("schema finanzas", () => {
     expect(columnExists("habits", "goal_amount_cents")).toBe(true);
   });
 
-  it("amount_cents no acepta valores <= 0", () => {
+  it("amount_cents no acepta valores <= 0", async () => {
+    await createCtx();
+    const user = db.prepare("SELECT id FROM users ORDER BY id LIMIT 1").get() as { id: number };
+    expect(user.id).toBeGreaterThan(0);
     expect(() =>
       db
-        .prepare("INSERT INTO transactions (user_id, type, amount_cents, date) VALUES (1, 'expense', 0, '2026-09-01')")
-        .run(),
-    ).toThrow();
+        .prepare("INSERT INTO transactions (user_id, type, amount_cents, date) VALUES (?, 'expense', 0, '2026-09-01')")
+        .run(user.id),
+    ).toThrow(/CHECK/i);
   });
 });
