@@ -40,15 +40,16 @@ function serialize(row: HabitRow) {
 }
 
 function validGoalLink(userId: number, goalId: unknown, amountCents: unknown): string | null {
+  if (amountCents !== undefined && amountCents !== null) {
+    if (!Number.isInteger(amountCents) || (amountCents as number) <= 0) {
+      return "goal_amount_cents debe ser un entero mayor que 0";
+    }
+  }
   if (goalId === undefined || goalId === null) return null;
   const gid = Number(goalId);
   if (!Number.isInteger(gid)) return "goal_id inválido";
   const goal = db.prepare("SELECT id FROM goals WHERE id = ? AND user_id = ?").get(gid, userId);
   if (!goal) return "Meta no encontrada";
-  if (amountCents === undefined || amountCents === null) return null;
-  if (!Number.isInteger(amountCents) || (amountCents as number) <= 0) {
-    return "goal_amount_cents debe ser un entero mayor que 0";
-  }
   return null;
 }
 
