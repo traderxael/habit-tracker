@@ -1199,6 +1199,10 @@ legend {
   gap: 0.5rem;
 }
 
+.today-finance {
+  margin-block-end: 1rem;
+}
+
 .today-finance-row {
   display: flex;
   flex-wrap: wrap;

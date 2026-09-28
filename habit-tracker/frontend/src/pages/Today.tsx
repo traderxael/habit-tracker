@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { api, ApiError } from "../api/client";
-import type { Completion, Habit } from "../types";
+import { api, ApiError, financeApi } from "../api/client";
+import type { Completion, FinanceSummary, Goal, Habit } from "../types";
 import { localDateKey } from "../lib/dates";
+import { formatMoney, monthKey } from "../lib/money";
 import { DEFAULT_COLOR } from "../lib/colors";
 import { EmptyState } from "../components/EmptyState";
 
@@ -12,6 +13,8 @@ export default function TodayPage() {
   const [doneToday, setDoneToday] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<FinanceSummary | null>(null);
+  const [goals, setGoals] = useState<Goal[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -34,6 +37,22 @@ export default function TodayPage() {
     void load();
   }, [load]);
 
+  const loadFinance = useCallback(() => {
+    const month = monthKey(new Date());
+    financeApi
+      .summary(month)
+      .then(setSummary)
+      .catch(() => undefined);
+    financeApi
+      .listGoals()
+      .then((g) => setGoals(g.goals.filter((x) => x.savedCents < x.targetCents)))
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    loadFinance();
+  }, [loadFinance]);
+
   async function toggle(habit: Habit) {
     const next = new Set(doneToday);
     if (next.has(habit.id)) next.delete(habit.id);
@@ -43,6 +62,7 @@ export default function TodayPage() {
       await api.post("/completions/toggle", { habitId: habit.id, date: today });
       const refreshed = await api.get<{ habits: Habit[] }>("/habits?includeStats=1");
       setHabits(refreshed.habits);
+      loadFinance();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Error al marcar");
       void load();
@@ -79,6 +99,38 @@ export default function TodayPage() {
               <span style={{ width: `${pct}%` }} />
             </div>
           </div>
+          {summary && (
+            <div className="card today-finance">
+              <h3>Este mes</h3>
+              <div className="today-finance-row">
+                <span>
+                  Ingresos <strong className="amount-pos">{formatMoney(summary.income)}</strong>
+                </span>
+                <span>
+                  Gastos <strong className="amount-neg">{formatMoney(summary.expense)}</strong>
+                </span>
+                <span>
+                  Balance <strong>{formatMoney(summary.balance)}</strong>
+                </span>
+                <Link to="/finance" className="btn-link">
+                  Ver movimientos
+                </Link>
+              </div>
+              {goals.slice(0, 3).map((g) => {
+                const pct = Math.min(100, Math.round((g.savedCents / g.targetCents) * 100));
+                return (
+                  <div key={g.id} className="mini-goal">
+                    <span aria-hidden="true">{g.icon ?? "🎯"}</span>
+                    <span>{g.name}</span>
+                    <div className="progress">
+                      <span style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="muted">{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <ul className="today-list">
           {habits.map((h) => {
             const done = doneToday.has(h.id);
