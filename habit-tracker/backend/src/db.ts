@@ -7,6 +7,7 @@ const dbPath = process.env.DB_PATH ?? path.join(here, "..", "data.sqlite");
 
 export const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
+db.pragma("foreign_keys = ON");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -95,7 +96,8 @@ for (const ddl of [
 ]) {
   try {
     db.exec(ddl);
-  } catch {
-    // La columna ya existe: no hacer nada.
+  } catch (err) {
+    // Idempotente: la columna ya existe en bases de datos migradas previamente.
+    if (!/duplicate column name/i.test(String(err))) throw err;
   }
 }
