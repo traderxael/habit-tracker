@@ -1,0 +1,23 @@
+# Dependencias y builds locales (se regeneran dentro de la imagen)
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+
+# Datos locales de SQLite (no hornear en la imagen)
+backend/data.sqlite
+backend/data.sqlite-shm
+backend/data.sqlite-wal
+**/*.db
+
+# Entorno, secretos y VCS
+**/.env
+**/.env.*
+.git
+.gitignore
+
+# Logs y varios
+**/*.log
+**/npm-debug.log*
+Dockerfile
+.dockerignore
+README.md
