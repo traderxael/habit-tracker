@@ -27,7 +27,7 @@ npm install
 npm run dev
 ```
 
-- Health check: http://localhost:3001/api/health → `{"status":"ok","tables":8}`
+- Health check: http://localhost:3001/api/health → `{"status":"ok","tables":9}` (las 8 tablas de la aplicación + `sqlite_sequence`, interna de SQLite).
 - Crea automáticamente `backend/data.sqlite` con las tablas `users`, `habits`, `completions`, `categories`, `debts`, `transactions`, `goals`, `goal_contributions`.
 
 **Frontend** (puerto 5173):
