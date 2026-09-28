@@ -123,6 +123,10 @@ transactionsRouter.put("/:id", (req, res) => {
     return;
   }
   const body = req.body ?? {};
+  if (body.type !== undefined && body.type !== existing.type) {
+    res.status(400).json({ error: "No se puede cambiar el tipo de un movimiento; elimínalo y crea uno nuevo" });
+    return;
+  }
   const type = body.type !== undefined ? body.type : existing.type;
   if (type !== "income" && type !== "expense") {
     res.status(400).json({ error: "El tipo debe ser 'income' o 'expense'" });

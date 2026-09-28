@@ -68,4 +68,48 @@ describe("transactions", () => {
     const del = await request(ctx.app).delete(`/api/categories/${cat}`).set("Authorization", ctx.auth);
     expect(del.status).toBe(409);
   });
+
+  it("400 al intentar cambiar el tipo en PUT y el tipo almacenado no cambia", async () => {
+    const ctx = await createCtx();
+    const cat = await firstCategoryId(ctx, "expense");
+    const created = await request(ctx.app)
+      .post("/api/transactions")
+      .set("Authorization", ctx.auth)
+      .send({ type: "expense", amount_cents: 900, date: "2026-09-10", category_id: cat });
+    expect(created.status).toBe(201);
+    const id = created.body.transaction.id;
+
+    const put = await request(ctx.app)
+      .put(`/api/transactions/${id}`)
+      .set("Authorization", ctx.auth)
+      .send({ type: "income" });
+    expect(put.status).toBe(400);
+    expect(put.body.error).toMatch(/tipo/i);
+
+    const get = await request(ctx.app).get("/api/transactions?month=2026-09").set("Authorization", ctx.auth);
+    const stored = get.body.transactions.find((t: { id: number }) => t.id === id);
+    expect(stored.type).toBe("expense");
+    expect(stored.amountCents).toBe(900);
+  });
+
+  it("PUT con el mismo tipo y cambios legítimos devuelve 200 y persiste", async () => {
+    const ctx = await createCtx();
+    const cat = await firstCategoryId(ctx, "expense");
+    const created = await request(ctx.app)
+      .post("/api/transactions")
+      .set("Authorization", ctx.auth)
+      .send({ type: "expense", amount_cents: 700, date: "2026-09-12", category_id: cat, note: "Original" });
+    expect(created.status).toBe(201);
+    const id = created.body.transaction.id;
+
+    const put = await request(ctx.app)
+      .put(`/api/transactions/${id}`)
+      .set("Authorization", ctx.auth)
+      .send({ type: "expense", amount_cents: 1500, note: "Actualizada", date: "2026-09-13" });
+    expect(put.status).toBe(200);
+    expect(put.body.transaction.type).toBe("expense");
+    expect(put.body.transaction.amountCents).toBe(1500);
+    expect(put.body.transaction.note).toBe("Actualizada");
+    expect(put.body.transaction.date).toBe("2026-09-13");
+  });
 });
