@@ -62,4 +62,16 @@ describe("habit-goal link", () => {
     expect(unlinked.body.habit.goalId).toBeNull();
     expect(unlinked.body.habit.goalAmountCents).toBeNull();
   });
+
+  it("400 al actualizar goal_amount_cents a un valor inválido", async () => {
+    const ctx = await createCtx();
+    const goalRes = await request(ctx.app).post("/api/goals").set("Authorization", ctx.auth)
+      .send({ name: "Meta", target_cents: 10000 });
+    const habitRes = await request(ctx.app).post("/api/habits").set("Authorization", ctx.auth)
+      .send({ name: "Hábito", goal_id: goalRes.body.goal.id, goal_amount_cents: 300 });
+    expect(habitRes.status).toBe(201);
+    const res = await request(ctx.app).put(`/api/habits/${habitRes.body.habit.id}`)
+      .set("Authorization", ctx.auth).send({ goal_amount_cents: -100 });
+    expect(res.status).toBe(400);
+  });
 });
