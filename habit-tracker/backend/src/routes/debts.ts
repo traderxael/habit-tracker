@@ -108,7 +108,7 @@ debtsRouter.delete("/:id", (req, res) => {
   }
   // Borrar los pagos ANTES que la deuda: el FK es ON DELETE SET NULL y los
   // dejaría huérfanos (debt_id = NULL) si se borra primero la deuda.
-  db.prepare("DELETE FROM transactions WHERE debt_id = ?").run(id);
+  db.prepare("DELETE FROM transactions WHERE debt_id = ? AND user_id = ?").run(id, req.userId!);
   db.prepare("DELETE FROM debts WHERE id = ? AND user_id = ?").run(id, req.userId!);
   res.status(204).end();
 });
