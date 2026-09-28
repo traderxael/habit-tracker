@@ -9,6 +9,7 @@ import { completionsRouter } from "./routes/completions.js";
 import { categoriesRouter } from "./routes/categories.js";
 import { transactionsRouter } from "./routes/transactions.js";
 import { financeRouter } from "./routes/finance.js";
+import { debtsRouter } from "./routes/debts.js";
 
 export function createApp(): express.Express {
   const app = express();
@@ -28,6 +29,7 @@ export function createApp(): express.Express {
   app.use("/api/categories", categoriesRouter);
   app.use("/api/transactions", transactionsRouter);
   app.use("/api/finance", financeRouter);
+  app.use("/api/debts", debtsRouter);
 
   // 404 en JSON para cualquier ruta /api no definida.
   app.use("/api", (_req, res) => {
