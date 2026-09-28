@@ -6,6 +6,7 @@ import { db } from "./db.js";
 import { authRouter } from "./routes/auth.js";
 import { habitsRouter } from "./routes/habits.js";
 import { completionsRouter } from "./routes/completions.js";
+import { categoriesRouter } from "./routes/categories.js";
 
 export function createApp(): express.Express {
   const app = express();
@@ -22,6 +23,7 @@ export function createApp(): express.Express {
   app.use("/api/auth", authRouter);
   app.use("/api/habits", habitsRouter);
   app.use("/api/completions", completionsRouter);
+  app.use("/api/categories", categoriesRouter);
 
   // 404 en JSON para cualquier ruta /api no definida.
   app.use("/api", (_req, res) => {
