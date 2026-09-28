@@ -101,12 +101,15 @@ debtsRouter.put("/:id", (req, res) => {
 // DELETE /api/debts/:id
 debtsRouter.delete("/:id", (req, res) => {
   const id = Number(req.params.id);
-  const info = db.prepare("DELETE FROM debts WHERE id = ? AND user_id = ?").run(id, req.userId!);
-  if (info.changes === 0) {
+  const existing = db.prepare("SELECT id FROM debts WHERE id = ? AND user_id = ?").get(id, req.userId!);
+  if (!existing) {
     res.status(404).json({ error: "Deuda no encontrada" });
     return;
   }
+  // Borrar los pagos ANTES que la deuda: el FK es ON DELETE SET NULL y los
+  // dejaría huérfanos (debt_id = NULL) si se borra primero la deuda.
   db.prepare("DELETE FROM transactions WHERE debt_id = ?").run(id);
+  db.prepare("DELETE FROM debts WHERE id = ? AND user_id = ?").run(id, req.userId!);
   res.status(204).end();
 });
 
