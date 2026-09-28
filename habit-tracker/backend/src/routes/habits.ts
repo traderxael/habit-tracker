@@ -14,6 +14,8 @@ interface HabitRow {
   color: string | null;
   schedule_json: string;
   archived: number;
+  goal_id: number | null;
+  goal_amount_cents: number | null;
   created_at: string;
 }
 
@@ -31,8 +33,23 @@ function serialize(row: HabitRow) {
     color: row.color,
     schedule,
     archived: !!row.archived,
+    goalId: row.goal_id,
+    goalAmountCents: row.goal_amount_cents,
     createdAt: row.created_at,
   };
+}
+
+function validGoalLink(userId: number, goalId: unknown, amountCents: unknown): string | null {
+  if (goalId === undefined || goalId === null) return null;
+  const gid = Number(goalId);
+  if (!Number.isInteger(gid)) return "goal_id inválido";
+  const goal = db.prepare("SELECT id FROM goals WHERE id = ? AND user_id = ?").get(gid, userId);
+  if (!goal) return "Meta no encontrada";
+  if (amountCents === undefined || amountCents === null) return null;
+  if (!Number.isInteger(amountCents) || (amountCents as number) <= 0) {
+    return "goal_amount_cents debe ser un entero mayor que 0";
+  }
+  return null;
 }
 
 // GET /api/habits?includeStats=1
@@ -59,9 +76,15 @@ habitsRouter.post("/", (req, res) => {
     res.status(400).json({ error: "El nombre es obligatorio" });
     return;
   }
+  const { goal_id, goal_amount_cents } = req.body ?? {};
+  const goalError = validGoalLink(userId, goal_id, goal_amount_cents);
+  if (goalError) {
+    res.status(400).json({ error: goalError });
+    return;
+  }
   const info = db
     .prepare(
-      "INSERT INTO habits (user_id, name, icon, color, schedule_json) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO habits (user_id, name, icon, color, schedule_json, goal_id, goal_amount_cents) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
     .run(
       userId,
@@ -69,6 +92,8 @@ habitsRouter.post("/", (req, res) => {
       typeof icon === "string" ? icon : null,
       typeof color === "string" ? color : null,
       JSON.stringify(schedule ?? { type: "daily" }),
+      goal_id !== undefined && goal_id !== null ? Number(goal_id) : null,
+      goal_amount_cents !== undefined && goal_amount_cents !== null ? Number(goal_amount_cents) : null,
     );
   const row = db.prepare("SELECT * FROM habits WHERE id = ?").get(Number(info.lastInsertRowid)) as HabitRow;
   res.status(201).json({ habit: serialize(row) });
@@ -86,13 +111,21 @@ habitsRouter.put("/:id", (req, res) => {
     return;
   }
   const { name, icon, color, schedule, archived } = req.body ?? {};
+  const { goal_id, goal_amount_cents } = req.body ?? {};
+  const goalError = validGoalLink(userId, goal_id, goal_amount_cents);
+  if (goalError) {
+    res.status(400).json({ error: goalError });
+    return;
+  }
   db.prepare(
     `UPDATE habits SET
        name = COALESCE(?, name),
        icon = COALESCE(?, icon),
        color = COALESCE(?, color),
        schedule_json = COALESCE(?, schedule_json),
-       archived = COALESCE(?, archived)
+       archived = COALESCE(?, archived),
+       goal_id = CASE WHEN ? THEN ? ELSE goal_id END,
+       goal_amount_cents = CASE WHEN ? THEN ? ELSE goal_amount_cents END
      WHERE id = ?`,
   ).run(
     typeof name === "string" && name.trim() ? name.trim() : null,
@@ -100,6 +133,10 @@ habitsRouter.put("/:id", (req, res) => {
     color !== undefined ? (typeof color === "string" ? color : null) : null,
     schedule !== undefined ? JSON.stringify(schedule) : null,
     archived !== undefined ? (archived ? 1 : 0) : null,
+    goal_id !== undefined ? 1 : 0,
+    goal_id !== undefined && goal_id !== null ? Number(goal_id) : null,
+    goal_amount_cents !== undefined ? 1 : 0,
+    goal_amount_cents !== undefined && goal_amount_cents !== null ? Number(goal_amount_cents) : null,
     id,
   );
   const updated = db.prepare("SELECT * FROM habits WHERE id = ?").get(id) as HabitRow;
