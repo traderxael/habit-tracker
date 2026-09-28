@@ -34,3 +34,68 @@ db.exec(`
     UNIQUE(habit_id, date)
   );
 `);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    icon TEXT,
+    type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+    color TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS debts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    total_cents INTEGER NOT NULL CHECK (total_cents > 0),
+    due_date TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+    debt_id INTEGER REFERENCES debts(id) ON DELETE SET NULL,
+    type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    note TEXT,
+    date TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS goals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    icon TEXT,
+    target_cents INTEGER NOT NULL CHECK (target_cents > 0),
+    deadline TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS goal_contributions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+    habit_id INTEGER REFERENCES habits(id) ON DELETE SET NULL,
+    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+    date TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+
+// Migración idempotente: vínculo hábito↔meta.
+for (const ddl of [
+  "ALTER TABLE habits ADD COLUMN goal_id INTEGER REFERENCES goals(id) ON DELETE SET NULL",
+  "ALTER TABLE habits ADD COLUMN goal_amount_cents INTEGER",
+]) {
+  try {
+    db.exec(ddl);
+  } catch {
+    // La columna ya existe: no hacer nada.
+  }
+}

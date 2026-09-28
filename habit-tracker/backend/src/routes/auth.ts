@@ -4,8 +4,16 @@ import jwt from "jsonwebtoken";
 import { db } from "../db.js";
 import { JWT_SECRET, TOKEN_TTL } from "../config.js";
 import { requireAuth } from "../middleware/auth.js";
+import { DEFAULT_CATEGORIES } from "../lib/money.js";
 
 export const authRouter = Router();
+
+function seedCategories(userId: number): void {
+  const insert = db.prepare(
+    "INSERT INTO categories (user_id, name, icon, type, color) VALUES (?, ?, ?, ?, ?)",
+  );
+  for (const c of DEFAULT_CATEGORIES) insert.run(userId, c.name, c.icon, c.type, c.color);
+}
 
 interface UserRow {
   id: number;
@@ -41,6 +49,7 @@ authRouter.post("/register", (req, res) => {
     .prepare("INSERT INTO users (email, password_hash) VALUES (?, ?)")
     .run(normalized, hash);
   const user = { id: Number(info.lastInsertRowid), email: normalized };
+  seedCategories(user.id);
   res.status(201).json({ token: sign(user), user });
 });
 
