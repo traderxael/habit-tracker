@@ -32,3 +32,6 @@ logs/
 Thumbs.db
 .vscode/
 .idea/
+
+# Scratch de ejecución (subagent-driven development)
+.superpowers/
