@@ -6,6 +6,7 @@ import TodayPage from "./pages/Today";
 import HabitsPage from "./pages/Habits";
 import FinancePage from "./pages/Finance";
 import DebtsPage from "./pages/Debts";
+import GoalsPage from "./pages/Goals";
 import CalendarPage from "./pages/Calendar";
 import LoginPage from "./pages/Login";
 
@@ -34,6 +35,7 @@ export default function App() {
           <NavLink to="/habits">Hábitos</NavLink>
           <NavLink to="/finance">Finanzas</NavLink>
           <NavLink to="/debts">Deudas</NavLink>
+          <NavLink to="/goals">Metas</NavLink>
           <NavLink to="/calendar">Calendario</NavLink>
           {user ? (
             <span className="nav-user">
@@ -80,6 +82,14 @@ export default function App() {
               element={
                 <Protected>
                   <DebtsPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/goals"
+              element={
+                <Protected>
+                  <GoalsPage />
                 </Protected>
               }
             />
