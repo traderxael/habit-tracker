@@ -7,6 +7,8 @@ import { authRouter } from "./routes/auth.js";
 import { habitsRouter } from "./routes/habits.js";
 import { completionsRouter } from "./routes/completions.js";
 import { categoriesRouter } from "./routes/categories.js";
+import { transactionsRouter } from "./routes/transactions.js";
+import { financeRouter } from "./routes/finance.js";
 
 export function createApp(): express.Express {
   const app = express();
@@ -24,6 +26,8 @@ export function createApp(): express.Express {
   app.use("/api/habits", habitsRouter);
   app.use("/api/completions", completionsRouter);
   app.use("/api/categories", categoriesRouter);
+  app.use("/api/transactions", transactionsRouter);
+  app.use("/api/finance", financeRouter);
 
   // 404 en JSON para cualquier ruta /api no definida.
   app.use("/api", (_req, res) => {
