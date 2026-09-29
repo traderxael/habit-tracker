@@ -93,6 +93,8 @@ export const financeApi = {
   deleteGoal: (id: number) => api.del<void>(`/goals/${id}`),
   contribute: (goalId: number, body: { amount_cents: number; date?: string }) =>
     api.post<{ contribution: GoalContribution }>(`/goals/${goalId}/contributions`, body),
+  listContributions: (goalId: number) =>
+    api.get<{ contributions: GoalContribution[] }>(`/goals/${goalId}/contributions`),
   deleteContribution: (goalId: number, contributionId: number) =>
     api.del<void>(`/goals/${goalId}/contributions/${contributionId}`),
 };
