@@ -1,6 +1,6 @@
 # Gestor de hábitos
 
-App web para registrar hábitos diarios y ver rachas y estadísticas. **MVP funcional**: registro/entrada de usuarios, CRUD de hábitos (diarios o por días concretos), marcado diario, rachas y calendario con estadísticas.
+App web para registrar hábitos diarios y ver rachas y estadísticas, con un módulo de **finanzas personales** (movimientos por categoría, deudas y metas de ahorro). Registro/entrada de usuarios, CRUD de hábitos (diarios o por días concretos), marcado diario, rachas y calendario con estadísticas.
 
 ## Estructura
 
@@ -27,8 +27,8 @@ npm install
 npm run dev
 ```
 
-- Health check: http://localhost:3001/api/health → `{"status":"ok","tables":4}`
-- Crea automáticamente `backend/data.sqlite` con las tablas `users`, `habits`, `completions`.
+- Health check: http://localhost:3001/api/health → `{"status":"ok","tables":9}` (las 8 tablas de la aplicación + `sqlite_sequence`, interna de SQLite).
+- Crea automáticamente `backend/data.sqlite` con las tablas `users`, `habits`, `completions`, `categories`, `debts`, `transactions`, `goals`, `goal_contributions`.
 
 **Frontend** (puerto 5173):
 
@@ -78,7 +78,7 @@ Abre http://localhost:3001/ — la app y la API se sirven juntas. Las rutas no-`
 |---|---|---|
 | `VITE_API_BASE` | vacío (mismo origen) | URL base de la API si el backend va en otro dominio |
 
-## Features (MVP)
+## Features
 
 - Registro e inicio de sesión (email + contraseña, JWT, bcrypt).
 - Rutas protegidas: sin sesión se redirige a `/login`.
@@ -86,6 +86,37 @@ Abre http://localhost:3001/ — la app y la API se sirven juntas. Las rutas no-`
 - Marcado diario con actualización optimista.
 - Rachas: actual y mejor; cumplimiento de los últimos 30 días.
 - Calendario mensual con filtro por hábito.
+- Finanzas: ingresos y gastos por categoría con resumen mensual.
+- Deudas con pagos y saldo calculado.
+- Metas de ahorro con aportes manuales y automáticos al completar hábitos vinculados.
+
+## API
+
+Todas las rutas viven bajo `/api` y requieren sesión (header `Authorization: Bearer <token>`), salvo `/api/health` y las de autenticación. Las rutas preexistentes de auth, hábitos y marcado (`/api/auth`, `/api/habits`, `/api/completions`) no cambian con el módulo de finanzas.
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/categories` | Lista las categorías del usuario |
+| `POST` | `/api/categories` | Crea una categoría |
+| `DELETE` | `/api/categories/:id` | Borra una categoría (409 si tiene movimientos) |
+| `GET` | `/api/transactions?month=YYYY-MM` | Lista los movimientos del mes indicado |
+| `POST` | `/api/transactions` | Crea un movimiento (ingreso o gasto) |
+| `PUT` | `/api/transactions/:id` | Edita un movimiento |
+| `DELETE` | `/api/transactions/:id` | Borra un movimiento |
+| `GET` | `/api/finance/summary?month=YYYY-MM` | Resumen mensual: ingresos, gastos, balance y totales por categoría |
+| `GET` | `/api/debts` | Lista deudas con saldo calculado |
+| `POST` | `/api/debts` | Crea una deuda |
+| `PUT` | `/api/debts/:id` | Edita una deuda |
+| `DELETE` | `/api/debts/:id` | Borra una deuda |
+| `POST` | `/api/debts/:id/payments` | Registra un pago (rechaza pagos mayores al saldo) |
+| `GET` | `/api/goals` | Lista metas con ahorrado/objetivo y aportes |
+| `POST` | `/api/goals` | Crea una meta |
+| `PUT` | `/api/goals/:id` | Edita una meta |
+| `DELETE` | `/api/goals/:id` | Borra una meta |
+| `POST` | `/api/goals/:id/contributions` | Aporte manual a una meta |
+| `DELETE` | `/api/goals/:id/contributions/:cid` | Borra un aporte |
+
+Los importes se manejan como **enteros en centavos** (`amount_cents`, `total_cents`, `target_cents`); las respuestas usan camelCase. Al completar un hábito vinculado a una meta, el backend registra automáticamente el aporte asociado (y lo revierte al desmarcar).
 
 ## Despliegue con Docker
 
@@ -116,5 +147,8 @@ Esta imagen es portable a cualquier host que ejecute Docker/OCI (Render, Railway
 | `npm run dev` | servidor con recarga (tsx watch) | Vite dev server |
 | `npm run build` | compila TS a `dist/` | build de producción a `dist/` |
 | `npm run typecheck` | `tsc --noEmit` | `tsc --noEmit` |
+| `npm test` | `vitest run` (tests de API) | `vitest run` (tests unitarios) |
+
+Los tests corren con [Vitest](https://vitest.dev) (dev dependency en ambos paquetes); el backend además usa `supertest` (solo backend) para ejercitar la API sobre `createApp` sin levantar servidor.
 
 Ver el plan completo en `../plan-proyecto.md` y el alcance en `../idea-proyecto.md`.

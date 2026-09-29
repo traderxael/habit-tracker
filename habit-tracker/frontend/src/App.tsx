@@ -4,6 +4,9 @@ import { useAuth } from "./auth/AuthContext";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import TodayPage from "./pages/Today";
 import HabitsPage from "./pages/Habits";
+import FinancePage from "./pages/Finance";
+import DebtsPage from "./pages/Debts";
+import GoalsPage from "./pages/Goals";
 import CalendarPage from "./pages/Calendar";
 import LoginPage from "./pages/Login";
 
@@ -30,6 +33,9 @@ export default function App() {
             Hoy
           </NavLink>
           <NavLink to="/habits">Hábitos</NavLink>
+          <NavLink to="/finance">Finanzas</NavLink>
+          <NavLink to="/debts">Deudas</NavLink>
+          <NavLink to="/goals">Metas</NavLink>
           <NavLink to="/calendar">Calendario</NavLink>
           {user ? (
             <span className="nav-user">
@@ -60,6 +66,30 @@ export default function App() {
               element={
                 <Protected>
                   <HabitsPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/finance"
+              element={
+                <Protected>
+                  <FinancePage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/debts"
+              element={
+                <Protected>
+                  <DebtsPage />
+                </Protected>
+              }
+            />
+            <Route
+              path="/goals"
+              element={
+                <Protected>
+                  <GoalsPage />
                 </Protected>
               }
             />

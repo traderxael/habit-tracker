@@ -20,6 +20,7 @@ colors:
   border-strong: "#d5dbe5"
   primary: "#4f46e5"
   primary-strong: "#4338ca"
+  primary-soft: "rgba(79, 70, 229, 0.1)"
   on-primary: "#ffffff"
   accent: "#7c3aed"
   accent-2: "#8b5cf6"
@@ -216,6 +217,45 @@ components:
     backgroundColor: "{colors.primary}"
     rounded: "{rounded.md}"
     height: 2.6rem
+  month-nav:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.md}"
+  amount-input:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.sm}"
+    padding: 0.55rem 0.6rem
+  movement-row:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+  movement-amount-income:
+    textColor: "{colors.success}"
+    typography: "{typography.body-md}"
+  movement-amount-expense:
+    textColor: "{colors.danger}"
+    typography: "{typography.body-md}"
+  goal-card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.lg}"
+    padding: 1rem 1.1rem
+  badge-goal-complete:
+    backgroundColor: "{colors.primary-soft}"
+    textColor: "{colors.primary}"
+    typography: "{typography.caption}"
+    rounded: "{rounded.full}"
+    padding: 0.15rem 0.6rem
+  finance-summary-card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.lg}"
+    padding: 1rem 1.1rem
 ---
 
 # Gestor de hábitos — Design Contract
@@ -255,7 +295,7 @@ Semantic roles (light values; dark values in parentheses where they differ):
   `#4338ca` (`#7c7ff5`) hover/link emphasis; `accent` `#7c3aed` and `accent-2`
   `#8b5cf6` are the gradient partners (never used as flat fills on their own).
 - **Status** — `danger` `#e11d48` destructive + error text; `success` `#16a34a`
-  reserved (defined, currently unused in UI — see Known Gaps).
+  for positive finance amounts (income, goal/debt progress semantics).
 - **Per-habit accent** — user-chosen habit colors are passed at runtime through the
   `--dot` CSS custom property (today checklist dot) and inline `background`
   (habit swatch). The shared fallback is `DEFAULT_COLOR = "#4f46e5"` in
@@ -366,6 +406,34 @@ States below use the same token names as the frontmatter.
   `primary-soft` fill, `primary` border, `--ring`). Clicking the active icon again
   clears it. Replaces the old free-text icon input in the habit form; the chosen
   glyph persists as the habit's `icon` and renders in the swatch and Today label.
+- **Finanzas** — the personal-finance module (`/finance`, `/debts`, `/goals`,
+  plus the Today finance card) reuses the existing card/progress/badge vocabulary:
+  - `month-nav` centers two ghost chevron buttons (`‹`/`›`, real `<button>`s with
+    `aria-label`) around a `<strong>` month label rendered by `monthLabelES`
+    (`lib/money.ts`) and capitalized via `text-transform: capitalize`.
+  - `amount-input` wraps a plain text input (`inputMode="decimal"`) behind a
+    static `$` prefix; the field is `surface-2` fill with a `border-strong`
+    edge, and `:focus-within` switches to a `primary` border + `--ring` (the
+    inner input removes its own outline so the wrapper owns the focus state).
+  - Movement rows are `.mov-item`s grouped by day: category glyph + name,
+    muted note, and a tabular-nums amount that carries **both** a `+`/`−` sign
+    **and** `--success`/`--danger` color (`.amount-pos`/`.amount-neg`), so
+    income vs expense is never encoded by color alone.
+  - By-category bars reuse the existing `.bar` track with the `--grad-bar`
+    fill (width = share of the month's expense), same as the calendar stats.
+  - Goal and debt cards are `.goal-card`s inside the base `card` surface: a
+    head row (icon + name + optional completion `badge` — `primary-soft` fill,
+    `primary` text, pill), muted meta line, a `.progress` bar (`--grad-bar`,
+    width = paid/saved %), and an actions row.
+  - The Today finance card (`.today-finance`) is a `card` with a
+    `.today-finance-row` month summary (income/expense/balance via the same
+    stat vocabulary) and `.mini-goal` rows — each a `.progress` bar — for
+    goals linked to habits.
+  - **Money rule:** amounts are stored as integer cents and every displayed
+    amount goes through `formatMoney` (`lib/money.ts`) — never a hardcoded `$`
+    concatenated with a raw number in JSX (the `$` prefix inside
+    `amount-input` is a decorative, `aria-hidden` field adornment, not money
+    formatting).
 
 ## Do's and Don'ts
 
@@ -416,8 +484,8 @@ separate mobile design.
 
 ## Known Gaps
 
-- `needs-design-decision` — `--success` `#16a34a` is defined but unused; decide
-  whether completed-state or streak milestones should adopt it, or remove it.
+- ~~`needs-design-decision` — `--success` is defined but unused~~ — resolved:
+  `--success` is now used by the finance module (income / positive amounts).
 - `needs-design-decision` — `--shadow-lg` and `--r-xl` are defined but unused;
   either reserve them for a future dialog/toast or drop them to reduce surface area.
 - No toast/dialog/drawer patterns exist yet; if added, extend this contract first.
