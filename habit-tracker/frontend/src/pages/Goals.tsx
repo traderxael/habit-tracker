@@ -1,13 +1,14 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { financeApi } from "../api/client";
+import { api, financeApi } from "../api/client";
 import { EmptyState } from "../components/EmptyState";
 import { IconPicker } from "../components/IconPicker";
 import { AmountInput } from "../components/AmountInput";
 import { formatMoney, parseAmountToCents } from "../lib/money";
-import type { Goal } from "../types";
+import type { Goal, GoalContribution, Habit } from "../types";
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [habits, setHabits] = useState<Habit[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -16,6 +17,12 @@ export default function GoalsPage() {
   const [deadline, setDeadline] = useState("");
   const [contributeTo, setContributeTo] = useState<number | null>(null);
   const [contributeAmount, setContributeAmount] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editTarget, setEditTarget] = useState("");
+  const [editDeadline, setEditDeadline] = useState("");
+  const [openContribs, setOpenContribs] = useState<number | null>(null);
+  const [contribs, setContribs] = useState<GoalContribution[]>([]);
 
   const load = async () => {
     const g = await financeApi.listGoals();
@@ -26,6 +33,10 @@ export default function GoalsPage() {
     load()
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
+    api
+      .get<{ habits: Habit[] }>("/habits")
+      .then((r) => setHabits(r.habits))
+      .catch(() => undefined);
   }, []);
 
   async function onCreate(e: FormEvent) {
@@ -62,6 +73,57 @@ export default function GoalsPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al aportar");
+    }
+  }
+
+  function startEdit(g: Goal) {
+    setEditingId(g.id);
+    setEditName(g.name);
+    setEditTarget(String(g.targetCents / 100));
+    setEditDeadline(g.deadline ?? "");
+    setContributeTo(null);
+  }
+
+  async function onSaveEdit(e: FormEvent, g: Goal) {
+    e.preventDefault();
+    setError(null);
+    const cents = parseAmountToCents(editTarget);
+    if (!cents) {
+      setError("Importe inválido");
+      return;
+    }
+    try {
+      await financeApi.updateGoal(g.id, { name: editName, target_cents: cents, deadline: editDeadline || null });
+      setEditingId(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar la meta");
+    }
+  }
+
+  async function toggleContribs(g: Goal) {
+    setError(null);
+    if (openContribs === g.id) {
+      setOpenContribs(null);
+      return;
+    }
+    try {
+      const r = await financeApi.listContributions(g.id);
+      setContribs(r.contributions);
+      setOpenContribs(g.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al cargar aportes");
+    }
+  }
+
+  async function onDeleteContribution(g: Goal, c: GoalContribution) {
+    if (!window.confirm(`¿Eliminar aporte de ${formatMoney(c.amountCents)}?`)) return;
+    try {
+      await financeApi.deleteContribution(g.id, c.id);
+      const [, r] = await Promise.all([load(), financeApi.listContributions(g.id)]);
+      setContribs(r.contributions);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al borrar el aporte");
     }
   }
 
@@ -112,6 +174,7 @@ export default function GoalsPage() {
         <ul className="habit-list">
           {goals.map((g) => {
             const pct = Math.min(100, Math.round((g.savedCents / g.targetCents) * 100));
+            const linked = habits.filter((h) => h.goalId === g.id);
             return (
               <li key={g.id} className="card goal-card">
                 <div className="goal-head">
@@ -120,6 +183,11 @@ export default function GoalsPage() {
                     {g.name}
                   </strong>
                   {pct >= 100 && <span className="badge">¡Lograda!</span>}
+                  {linked.length > 0 && (
+                    <span className="badge" title={linked.map((h) => h.name).join(", ")}>
+                      🔗 {linked.length} hábito{linked.length > 1 ? "s" : ""}
+                    </span>
+                  )}
                 </div>
                 <div className="progress">
                   <span style={{ width: `${pct}%` }} />
@@ -142,10 +210,55 @@ export default function GoalsPage() {
                   >
                     Aportar
                   </button>
+                  <button type="button" className="btn-ghost" onClick={() => startEdit(g)}>
+                    Editar
+                  </button>
+                  <button type="button" className="btn-ghost" onClick={() => toggleContribs(g)}>
+                    Aportes
+                  </button>
                   <button type="button" className="btn-link" onClick={() => onDelete(g)}>
                     Eliminar
                   </button>
                 </div>
+                {editingId === g.id && (
+                  <form onSubmit={(e) => onSaveEdit(e, g)} className="row">
+                    <label>
+                      Nombre
+                      <input value={editName} onChange={(e) => setEditName(e.target.value)} required />
+                    </label>
+                    <label>
+                      Objetivo
+                      <AmountInput id={`edit-target-${g.id}`} value={editTarget} onChange={setEditTarget} />
+                    </label>
+                    <label>
+                      Fecha límite
+                      <input type="date" value={editDeadline} onChange={(e) => setEditDeadline(e.target.value)} />
+                    </label>
+                    <button type="submit" className="btn-primary">
+                      Guardar
+                    </button>
+                    <button type="button" className="btn-ghost" onClick={() => setEditingId(null)}>
+                      Cancelar
+                    </button>
+                  </form>
+                )}
+                {openContribs === g.id && (
+                  <ul className="goal-card">
+                    {contribs.length === 0 && <li className="muted">Sin aportes registrados.</li>}
+                    {contribs.map((c) => (
+                      <li key={c.id} className="mov-item">
+                        <span className="mov-cat">
+                          {c.date}
+                          <span className="mov-note">{c.habitId ? "automático" : "manual"}</span>
+                        </span>
+                        <span className="mov-amount">{formatMoney(c.amountCents)}</span>
+                        <button type="button" className="btn-link" onClick={() => onDeleteContribution(g, c)}>
+                          Borrar
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {contributeTo === g.id && (
                   <form onSubmit={(e) => onContribute(e, g)} className="row">
                     <label>
