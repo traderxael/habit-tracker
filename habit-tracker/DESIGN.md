@@ -337,7 +337,7 @@ Three shadows, all tinted with the ink color (light) or neutral black (dark):
 
 - `--shadow-sm` — resting cards, rows, buttons, logo, active nav.
 - `--shadow-md` — hover lift on rows/buttons (`translateY(-1px)`).
-- `--shadow-lg` — defined for overlays; currently unused (Known Gaps).
+- `--shadow-lg` — overlays and the auth split panel shell (see Components → Auth).
 - `--ring` `0 0 0 4px rgba(79,70,229,0.18)` — the single focus-visible treatment.
 
 Depth is expressed as *lift on hover* (translate + shadow bump), not stacking new
@@ -486,8 +486,13 @@ separate mobile design.
 
 - ~~`needs-design-decision` — `--success` is defined but unused~~ — resolved:
   `--success` is now used by the finance module (income / positive amounts).
-- `needs-design-decision` — `--shadow-lg` and `--r-xl` are defined but unused;
-  either reserve them for a future dialog/toast or drop them to reduce surface area.
+- ~~`needs-design-decision` — `--shadow-lg` and `--r-xl` are defined but unused~~ —
+  resolved: the auth split panel (`## Components` → Auth) uses `--shadow-lg` and
+  `{rounded.xl}`. Both are now in use; keep them for overlays and the next dialog/toast.
+- PWA is now installed as a personal app: the `manifest` `theme_color`/`background_color`
+  reuse the `primary`/`bg` tokens (the manifest is JSON and cannot reference `var()`),
+  and the app icon is the brand mark (indigo field + white check) rasterized from
+  `frontend/public/icon.svg` via `sharp` (see `frontend/scripts/gen-icons.mjs`).
 - No toast/dialog/drawer patterns exist yet; if added, extend this contract first.
 - Component tokens in frontmatter omit border/shadow/gap (per schema, those live in
   prose above); tooling that needs them must read the `## Components` section.

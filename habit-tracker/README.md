@@ -6,8 +6,8 @@ App web para registrar hábitos diarios y ver rachas y estadísticas, con un mó
 
 ```
 habit-tracker/
-├── backend/    # API REST — Node + Express + TypeScript + SQLite (better-sqlite3)
-└── frontend/   # UI — React + Vite + TypeScript + React Router
+├── backend/    # API REST — Node + Express + TypeScript + SQLite/libSQL (@libsql/client)
+└── frontend/   # UI — React + Vite + TypeScript + React Router + PWA
 ```
 
 ## Requisitos
@@ -27,8 +27,8 @@ npm install
 npm run dev
 ```
 
-- Health check: http://localhost:3001/api/health → `{"status":"ok","tables":9}` (las 8 tablas de la aplicación + `sqlite_sequence`, interna de SQLite).
-- Crea automáticamente `backend/data.sqlite` con las tablas `users`, `habits`, `completions`, `categories`, `debts`, `transactions`, `goals`, `goal_contributions`.
+- Health check: http://localhost:3001/api/health → `{"status":"ok","tables":N}` (N = número de tablas; puede variar según el backend SQLite/libSQL, no se afirma un número concreto).
+- Crea automáticamente las tablas `users`, `habits`, `completions`, `categories`, `debts`, `transactions`, `goals`, `goal_contributions` en la base indicada por `DATABASE_URL` (por defecto `file:./data.sqlite`).
 
 **Frontend** (puerto 5173):
 
@@ -41,8 +41,8 @@ npm run dev
 - Abre http://localhost:5173/
 - El frontend proxyea `/api/*` al backend (configurado en `frontend/vite.config.ts`).
 
-> Nota: este entorno bloquea por defecto los *install scripts*. Tras `npm install`, si `esbuild` o `better-sqlite3` quedaron sin compilar, apruébalos con:
-> `npm install-scripts approve esbuild better-sqlite3`
+> Nota: este entorno bloquea por defecto los *install scripts*. `@libsql/client` usa binarios precompilados, pero si `esbuild` o `libsql` quedaron sin preparar tras `npm install`, apruébalos con:
+> `npm install-scripts approve esbuild libsql`
 
 ## Cómo correrlo en producción (un solo servidor)
 
@@ -68,7 +68,9 @@ Abre http://localhost:3001/ — la app y la API se sirven juntas. Las rutas no-`
 | Variable | Por defecto | Descripción |
 |---|---|---|
 | `PORT` | `3001` | Puerto del servidor |
-| `DB_PATH` | `./data.sqlite` | Ruta del archivo SQLite |
+| `DATABASE_URL` | `file:./data.sqlite` | URL libSQL: archivo local (`file:...`), `:memory:` o Turso remoto (`libsql://…`) |
+| `TURSO_DATABASE_URL` | — | Solo producción: URL de Turso (tiene prioridad sobre `DATABASE_URL`) |
+| `TURSO_AUTH_TOKEN` | — | Solo producción con base `libsql://`: token de Turso |
 | `JWT_SECRET` | `dev-secret-change-me` | **Cambiar en producción** |
 | `TOKEN_TTL` | `7d` | Duración de la sesión |
 
@@ -114,6 +116,7 @@ Todas las rutas viven bajo `/api` y requieren sesión (header `Authorization: Be
 | `PUT` | `/api/goals/:id` | Edita una meta |
 | `DELETE` | `/api/goals/:id` | Borra una meta |
 | `POST` | `/api/goals/:id/contributions` | Aporte manual a una meta |
+| `GET` | `/api/goals/:id/contributions` | Lista los aportes de una meta |
 | `DELETE` | `/api/goals/:id/contributions/:cid` | Borra un aporte |
 
 Los importes se manejan como **enteros en centavos** (`amount_cents`, `total_cents`, `target_cents`); las respuestas usan camelCase. Al completar un hábito vinculado a una meta, el backend registra automáticamente el aporte asociado (y lo revierte al desmarcar).
@@ -135,10 +138,24 @@ docker run --rm -p 3001:3001 \
 
 Abre http://localhost:3001/. La base de datos vive en el volumen `habit-tracker-data` (ruta interna `/data/data.sqlite`), de modo que sobrevive a recrear el contenedor.
 
-Variables en el contenedor: `PORT` (3001), `DB_PATH` (/data/data.sqlite), `JWT_SECRET` (**cambiar**), `TOKEN_TTL` (7d). El contenedor corre con usuario sin privilegios e incluye `HEALTHCHECK` sobre `/api/health`.
+Variables en el contenedor: `PORT` (3001), `DATABASE_URL` (`file:/data/data.sqlite`), `JWT_SECRET` (**cambiar**), `TOKEN_TTL` (7d). El contenedor corre con usuario sin privilegios e incluye `HEALTHCHECK` sobre `/api/health`. El esquema se crea solo al arrancar (idempotente).
 
 Esta imagen es portable a cualquier host que ejecute Docker/OCI (Render, Railway, Fly.io, un VPS, etc.). Si en algún momento separas el backend en otro dominio, compila el frontend con `VITE_API_BASE` apuntando a la API.
 
+
+## Desplegar en Vercel + Turso (app instalable en el móvil)
+
+La ruta gratuita y sin tarjeta usa **Vercel** (frontend estático + la API Express como función serverless) y **Turso** (libSQL remoto, compatible con SQLite). El enrutado, el `init-db` de esquema y las variables de entorno están detallados en [`DEPLOY.md`](./DEPLOY.md). Resumen:
+
+1. Crear una base en Turso y su token; inicializar el esquema una vez: `cd backend && TURSO_DATABASE_URL=… TURSO_AUTH_TOKEN=… npm run db:init`.
+2. Conectar el repo a Vercel (o `vercel`), definir `JWT_SECRET`, `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN` como variables de entorno, y `vercel --prod`.
+3. Abrir la URL publicada en el móvil y **instalar la PWA**.
+
+> Vercel **no** persiste un archivo SQLite (su filesystem es efímero), por eso la base vive en Turso. El modo local/Docker sigue usando un archivo `file:…`.
+
+## PWA (instalar en el móvil)
+
+La app es instalable: tras desplegarla, en Android (Chrome) usa el menú → *Añadir a pantalla de inicio*; en iOS (Safari) usa *Compartir* → *Añadir a pantalla de inicio*. Se abre a pantalla completa con su propio icono. El service worker precachea el shell (arranca sin conexión) pero **nunca cachea la API**: los datos financieros siempre se piden a red.
 
 ## Scripts
 
