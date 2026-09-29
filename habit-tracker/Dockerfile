@@ -11,10 +11,8 @@ RUN npm run build
 # ---- Etapa 2: compilar el backend (y dejar solo deps de producción) ----
 FROM node:22-slim AS backend-build
 WORKDIR /app/backend
-# Herramientas por si better-sqlite3 necesitara compilar desde fuente
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ \
-  && rm -rf /var/lib/apt/lists/*
+# @libsql/client trae binarios precompilados para Debian x64/arm64; ya no se
+# necesitan python3/make/g++ (desapareció better-sqlite3).
 COPY backend/package*.json ./
 RUN npm ci
 COPY backend/ ./
@@ -25,7 +23,7 @@ RUN npm prune --omit=dev
 FROM node:22-slim AS runtime
 ENV NODE_ENV=production
 ENV PORT=3001
-ENV DB_PATH=/data/data.sqlite
+ENV DATABASE_URL=file:/data/data.sqlite
 WORKDIR /app
 
 # Código del backend + dependencias de producción
