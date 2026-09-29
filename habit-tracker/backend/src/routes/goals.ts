@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "../db.js";
+import { db, client } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { DATE_RE, isoDay, validAmountCents } from "../lib/money.js";
 
@@ -31,8 +31,8 @@ export function serializeGoal(row: GoalRow) {
     id: row.id,
     name: row.name,
     icon: row.icon,
-    targetCents: row.target_cents,
-    savedCents: row.saved_cents,
+    targetCents: Number(row.target_cents),
+    savedCents: Number(row.saved_cents),
     deadline: row.deadline,
     createdAt: row.created_at,
   };
@@ -42,7 +42,7 @@ function serializeContribution(row: ContributionRow) {
   return {
     id: row.id,
     goalId: row.goal_id,
-    amountCents: row.amount_cents,
+    amountCents: Number(row.amount_cents),
     habitId: row.habit_id,
     date: row.date,
     createdAt: row.created_at,
@@ -56,15 +56,15 @@ const SELECT_GOAL = `
     FROM goals g`;
 
 // GET /api/goals
-goalsRouter.get("/", (req, res) => {
-  const rows = db
+goalsRouter.get("/", async (req, res) => {
+  const rows = (await db
     .prepare(`${SELECT_GOAL} WHERE g.user_id = ? ORDER BY g.created_at ASC`)
-    .all(req.userId!) as GoalRow[];
+    .all(req.userId!)) as GoalRow[];
   res.json({ goals: rows.map(serializeGoal) });
 });
 
 // POST /api/goals
-goalsRouter.post("/", (req, res) => {
+goalsRouter.post("/", async (req, res) => {
   const { name, icon, target_cents, deadline } = req.body ?? {};
   if (typeof name !== "string" || name.trim().length === 0) {
     res.status(400).json({ error: "El nombre es obligatorio" });
@@ -78,7 +78,7 @@ goalsRouter.post("/", (req, res) => {
     res.status(400).json({ error: "Fecha inválida (YYYY-MM-DD)" });
     return;
   }
-  const info = db
+  const info = await db
     .prepare("INSERT INTO goals (user_id, name, icon, target_cents, deadline) VALUES (?, ?, ?, ?, ?)")
     .run(
       req.userId!,
@@ -87,14 +87,14 @@ goalsRouter.post("/", (req, res) => {
       target_cents,
       deadline ?? null,
     );
-  const row = db.prepare(`${SELECT_GOAL} WHERE g.id = ?`).get(Number(info.lastInsertRowid)) as GoalRow;
+  const row = (await db.prepare(`${SELECT_GOAL} WHERE g.id = ?`).get(info.lastInsertRowid)) as GoalRow;
   res.status(201).json({ goal: serializeGoal(row) });
 });
 
 // PUT /api/goals/:id
-goalsRouter.put("/:id", (req, res) => {
+goalsRouter.put("/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const existing = db.prepare("SELECT id FROM goals WHERE id = ? AND user_id = ?").get(id, req.userId!);
+  const existing = await db.prepare("SELECT id FROM goals WHERE id = ? AND user_id = ?").get(id, req.userId!);
   if (!existing) {
     res.status(404).json({ error: "Meta no encontrada" });
     return;
@@ -108,7 +108,7 @@ goalsRouter.put("/:id", (req, res) => {
     res.status(400).json({ error: "Fecha inválida (YYYY-MM-DD)" });
     return;
   }
-  db.prepare(
+  await db.prepare(
     `UPDATE goals SET
        name = COALESCE(?, name),
        icon = CASE WHEN ? THEN ? ELSE icon END,
@@ -124,27 +124,56 @@ goalsRouter.put("/:id", (req, res) => {
     deadline ?? null,
     id,
   );
-  const row = db.prepare(`${SELECT_GOAL} WHERE g.id = ?`).get(id) as GoalRow;
+  const row = (await db.prepare(`${SELECT_GOAL} WHERE g.id = ?`).get(id)) as GoalRow;
   res.json({ goal: serializeGoal(row) });
 });
 
 // DELETE /api/goals/:id
-goalsRouter.delete("/:id", (req, res) => {
-  const info = db
-    .prepare("DELETE FROM goals WHERE id = ? AND user_id = ?")
-    .run(Number(req.params.id), req.userId!);
-  if (info.changes === 0) {
+goalsRouter.delete("/:id", async (req, res) => {
+  const id = Number(req.params.id);
+  const owner = req.userId!;
+  const existing = await db.prepare("SELECT id FROM goals WHERE id = ? AND user_id = ?").get(id, owner);
+  if (!existing) {
     res.status(404).json({ error: "Meta no encontrada" });
     return;
   }
+  // Cascada garantizada en código (lote atómico), sin depender del enforcement de
+  // FK de Turso: borrar aportes, desvincular hábitos y borrar la meta.
+  await client.batch(
+    [
+      { sql: "DELETE FROM goal_contributions WHERE goal_id = ?", args: [id] },
+      {
+        sql: "UPDATE habits SET goal_id = NULL, goal_amount_cents = NULL WHERE goal_id = ? AND user_id = ?",
+        args: [id, owner],
+      },
+      { sql: "DELETE FROM goals WHERE id = ? AND user_id = ?", args: [id, owner] },
+    ],
+    "write",
+  );
   res.status(204).end();
 });
 
-// POST /api/goals/:id/contributions
-goalsRouter.post("/:id/contributions", (req, res) => {
+// GET /api/goals/:id/contributions
+goalsRouter.get("/:id/contributions", async (req, res) => {
   const id = Number(req.params.id);
-  const goal = db.prepare("SELECT id FROM goals WHERE id = ? AND user_id = ?").get(id, req.userId!);
+  const goal = await db.prepare("SELECT id FROM goals WHERE id = ? AND user_id = ?").get(id, req.userId!);
   if (!goal) {
+    res.status(404).json({ error: "Meta no encontrada" });
+    return;
+  }
+  const rows = (await db
+    .prepare("SELECT * FROM goal_contributions WHERE goal_id = ? AND user_id = ? ORDER BY date DESC, id DESC")
+    .all(id, req.userId!)) as ContributionRow[];
+  res.json({ contributions: rows.map(serializeContribution) });
+});
+
+// POST /api/goals/:id/contributions
+goalsRouter.post("/:id/contributions", async (req, res) => {
+  const id = Number(req.params.id);
+  const goalRow = (await db
+    .prepare("SELECT id FROM goals WHERE id = ? AND user_id = ?")
+    .get(id, req.userId!)) as { id: number } | undefined;
+  if (!goalRow) {
     res.status(404).json({ error: "Meta no encontrada" });
     return;
   }
@@ -157,18 +186,18 @@ goalsRouter.post("/:id/contributions", (req, res) => {
     res.status(400).json({ error: "Fecha inválida (YYYY-MM-DD)" });
     return;
   }
-  const info = db
+  const info = await db
     .prepare("INSERT INTO goal_contributions (user_id, goal_id, amount_cents, date) VALUES (?, ?, ?, ?)")
     .run(req.userId!, id, amount_cents, typeof date === "string" ? date : isoDay(new Date()));
-  const row = db
+  const row = (await db
     .prepare("SELECT * FROM goal_contributions WHERE id = ?")
-    .get(Number(info.lastInsertRowid)) as ContributionRow;
+    .get(info.lastInsertRowid)) as ContributionRow;
   res.status(201).json({ contribution: serializeContribution(row) });
 });
 
 // DELETE /api/goals/:id/contributions/:cid
-goalsRouter.delete("/:id/contributions/:cid", (req, res) => {
-  const info = db
+goalsRouter.delete("/:id/contributions/:cid", async (req, res) => {
+  const info = await db
     .prepare("DELETE FROM goal_contributions WHERE id = ? AND goal_id = ? AND user_id = ?")
     .run(Number(req.params.cid), Number(req.params.id), req.userId!);
   if (info.changes === 0) {

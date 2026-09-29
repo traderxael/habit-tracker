@@ -17,11 +17,11 @@ export function createApp(): express.Express {
   app.use(cors());
   app.use(express.json());
 
-  app.get("/api/health", (_req, res) => {
-    const row = db
+  app.get("/api/health", async (_req, res) => {
+    const row = (await db
       .prepare("SELECT COUNT(*) AS tables FROM sqlite_master WHERE type = 'table'")
-      .get() as { tables: number };
-    res.json({ status: "ok", tables: row.tables });
+      .get()) as { tables: number };
+    res.json({ status: "ok", tables: Number(row.tables) });
   });
 
   app.use("/api/auth", authRouter);

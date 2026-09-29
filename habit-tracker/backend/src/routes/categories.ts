@@ -29,15 +29,15 @@ export function serializeCategory(row: CategoryRow) {
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 // GET /api/categories
-categoriesRouter.get("/", (req, res) => {
-  const rows = db
+categoriesRouter.get("/", async (req, res) => {
+  const rows = (await db
     .prepare("SELECT * FROM categories WHERE user_id = ? ORDER BY type ASC, name ASC")
-    .all(req.userId!) as CategoryRow[];
+    .all(req.userId!)) as CategoryRow[];
   res.json({ categories: rows.map(serializeCategory) });
 });
 
 // POST /api/categories
-categoriesRouter.post("/", (req, res) => {
+categoriesRouter.post("/", async (req, res) => {
   const { name, icon, type, color } = req.body ?? {};
   if (typeof name !== "string" || name.trim().length === 0) {
     res.status(400).json({ error: "El nombre es obligatorio" });
@@ -51,7 +51,7 @@ categoriesRouter.post("/", (req, res) => {
     res.status(400).json({ error: "Color inválido (usa #rrggbb)" });
     return;
   }
-  const info = db
+  const info = await db
     .prepare("INSERT INTO categories (user_id, name, icon, type, color) VALUES (?, ?, ?, ?, ?)")
     .run(
       req.userId!,
@@ -60,29 +60,29 @@ categoriesRouter.post("/", (req, res) => {
       type,
       typeof color === "string" ? color : null,
     );
-  const row = db
+  const row = (await db
     .prepare("SELECT * FROM categories WHERE id = ?")
-    .get(Number(info.lastInsertRowid)) as CategoryRow;
+    .get(info.lastInsertRowid)) as CategoryRow;
   res.status(201).json({ category: serializeCategory(row) });
 });
 
 // DELETE /api/categories/:id
-categoriesRouter.delete("/:id", (req, res) => {
+categoriesRouter.delete("/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const row = db
+  const row = (await db
     .prepare("SELECT id FROM categories WHERE id = ? AND user_id = ?")
-    .get(id, req.userId!) as { id: number } | undefined;
+    .get(id, req.userId!)) as { id: number } | undefined;
   if (!row) {
     res.status(404).json({ error: "Categoría no encontrada" });
     return;
   }
-  const used = db
+  const used = (await db
     .prepare("SELECT COUNT(*) AS n FROM transactions WHERE category_id = ?")
-    .get(id) as { n: number };
-  if (used.n > 0) {
+    .get(id)) as { n: number };
+  if (Number(used.n) > 0) {
     res.status(409).json({ error: "La categoría tiene movimientos asociados y no puede borrarse" });
     return;
   }
-  db.prepare("DELETE FROM categories WHERE id = ?").run(id);
+  await db.prepare("DELETE FROM categories WHERE id = ?").run(id);
   res.status(204).end();
 });

@@ -7,14 +7,14 @@ export const financeRouter = Router();
 financeRouter.use(requireAuth);
 
 // GET /api/finance/summary?month=YYYY-MM
-financeRouter.get("/summary", (req, res) => {
+financeRouter.get("/summary", async (req, res) => {
   const month = String(req.query.month ?? "");
   if (!MONTH_RE.test(month)) {
     res.status(400).json({ error: "Parámetro month obligatorio (YYYY-MM)" });
     return;
   }
   const { from, to } = monthRange(month);
-  const totals = db
+  const totals = (await db
     .prepare(
       `SELECT
          COALESCE(SUM(CASE WHEN type = 'income' THEN amount_cents END), 0) AS income,
@@ -22,8 +22,8 @@ financeRouter.get("/summary", (req, res) => {
        FROM transactions
        WHERE user_id = ? AND date >= ? AND date <= ?`,
     )
-    .get(req.userId!, from, to) as { income: number; expense: number };
-  const byCategory = db
+    .get(req.userId!, from, to)) as { income: number; expense: number };
+  const byCategory = (await db
     .prepare(
       `SELECT c.id AS categoryId, c.name AS name, c.icon AS icon, c.color AS color,
               SUM(t.amount_cents) AS total
@@ -33,7 +33,7 @@ financeRouter.get("/summary", (req, res) => {
        GROUP BY c.id
        ORDER BY total DESC`,
     )
-    .all(req.userId!, from, to) as {
+    .all(req.userId!, from, to)) as {
     categoryId: number;
     name: string;
     icon: string | null;
@@ -41,9 +41,9 @@ financeRouter.get("/summary", (req, res) => {
     total: number;
   }[];
   res.json({
-    income: totals.income,
-    expense: totals.expense,
-    balance: totals.income - totals.expense,
-    byCategory,
+    income: Number(totals.income),
+    expense: Number(totals.expense),
+    balance: Number(totals.income) - Number(totals.expense),
+    byCategory: byCategory.map((c) => ({ ...c, total: Number(c.total) })),
   });
 });

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db } from "../db.js";
+import { db, client } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { habitStats, type Schedule } from "../lib/streaks.js";
 
@@ -39,7 +39,7 @@ function serialize(row: HabitRow) {
   };
 }
 
-function validGoalLink(userId: number, goalId: unknown, amountCents: unknown): string | null {
+async function validGoalLink(userId: number, goalId: unknown, amountCents: unknown): Promise<string | null> {
   if (amountCents !== undefined && amountCents !== null) {
     if (!Number.isInteger(amountCents) || (amountCents as number) <= 0) {
       return "goal_amount_cents debe ser un entero mayor que 0";
@@ -48,29 +48,32 @@ function validGoalLink(userId: number, goalId: unknown, amountCents: unknown): s
   if (goalId === undefined || goalId === null) return null;
   const gid = Number(goalId);
   if (!Number.isInteger(gid)) return "goal_id inválido";
-  const goal = db.prepare("SELECT id FROM goals WHERE id = ? AND user_id = ?").get(gid, userId);
+  const goal = await db.prepare("SELECT id FROM goals WHERE id = ? AND user_id = ?").get(gid, userId);
   if (!goal) return "Meta no encontrada";
   return null;
 }
 
 // GET /api/habits?includeStats=1
-habitsRouter.get("/", (req, res) => {
+habitsRouter.get("/", async (req, res) => {
   const userId = req.userId!;
-  const rows = db
+  const rows = (await db
     .prepare(
       "SELECT * FROM habits WHERE user_id = ? AND archived = 0 ORDER BY created_at ASC, id ASC",
     )
-    .all(userId) as HabitRow[];
+    .all(userId)) as HabitRow[];
   const habits = rows.map(serialize);
   if (req.query.includeStats === "1") {
-    res.json({ habits: habits.map((h) => ({ ...h, stats: habitStats(h.id, h.schedule) })) });
+    const withStats = await Promise.all(
+      habits.map(async (h) => ({ ...h, stats: await habitStats(h.id, h.schedule) })),
+    );
+    res.json({ habits: withStats });
     return;
   }
   res.json({ habits });
 });
 
 // POST /api/habits
-habitsRouter.post("/", (req, res) => {
+habitsRouter.post("/", async (req, res) => {
   const userId = req.userId!;
   const { name, icon, color, schedule } = req.body ?? {};
   if (typeof name !== "string" || name.trim().length === 0) {
@@ -78,12 +81,12 @@ habitsRouter.post("/", (req, res) => {
     return;
   }
   const { goal_id, goal_amount_cents } = req.body ?? {};
-  const goalError = validGoalLink(userId, goal_id, goal_amount_cents);
+  const goalError = await validGoalLink(userId, goal_id, goal_amount_cents);
   if (goalError) {
     res.status(400).json({ error: goalError });
     return;
   }
-  const info = db
+  const info = await db
     .prepare(
       "INSERT INTO habits (user_id, name, icon, color, schedule_json, goal_id, goal_amount_cents) VALUES (?, ?, ?, ?, ?, ?, ?)",
     )
@@ -96,29 +99,29 @@ habitsRouter.post("/", (req, res) => {
       goal_id !== undefined && goal_id !== null ? Number(goal_id) : null,
       goal_amount_cents !== undefined && goal_amount_cents !== null ? Number(goal_amount_cents) : null,
     );
-  const row = db.prepare("SELECT * FROM habits WHERE id = ?").get(Number(info.lastInsertRowid)) as HabitRow;
+  const row = (await db.prepare("SELECT * FROM habits WHERE id = ?").get(info.lastInsertRowid)) as HabitRow;
   res.status(201).json({ habit: serialize(row) });
 });
 
 // PUT /api/habits/:id
-habitsRouter.put("/:id", (req, res) => {
+habitsRouter.put("/:id", async (req, res) => {
   const userId = req.userId!;
   const id = Number(req.params.id);
-  const row = db
+  const row = (await db
     .prepare("SELECT * FROM habits WHERE id = ? AND user_id = ?")
-    .get(id, userId) as HabitRow | undefined;
+    .get(id, userId)) as HabitRow | undefined;
   if (!row) {
     res.status(404).json({ error: "Hábito no encontrado" });
     return;
   }
   const { name, icon, color, schedule, archived } = req.body ?? {};
   const { goal_id, goal_amount_cents } = req.body ?? {};
-  const goalError = validGoalLink(userId, goal_id, goal_amount_cents);
+  const goalError = await validGoalLink(userId, goal_id, goal_amount_cents);
   if (goalError) {
     res.status(400).json({ error: goalError });
     return;
   }
-  db.prepare(
+  await db.prepare(
     `UPDATE habits SET
        name = COALESCE(?, name),
        icon = COALESCE(?, icon),
@@ -140,18 +143,28 @@ habitsRouter.put("/:id", (req, res) => {
     goal_amount_cents !== undefined && goal_amount_cents !== null ? Number(goal_amount_cents) : null,
     id,
   );
-  const updated = db.prepare("SELECT * FROM habits WHERE id = ?").get(id) as HabitRow;
+  const updated = (await db.prepare("SELECT * FROM habits WHERE id = ?").get(id)) as HabitRow;
   res.json({ habit: serialize(updated) });
 });
 
 // DELETE /api/habits/:id
-habitsRouter.delete("/:id", (req, res) => {
+habitsRouter.delete("/:id", async (req, res) => {
   const userId = req.userId!;
   const id = Number(req.params.id);
-  const info = db.prepare("DELETE FROM habits WHERE id = ? AND user_id = ?").run(id, userId);
-  if (info.changes === 0) {
+  const existing = await db.prepare("SELECT id FROM habits WHERE id = ? AND user_id = ?").get(id, userId);
+  if (!existing) {
     res.status(404).json({ error: "Hábito no encontrado" });
     return;
   }
+  // Cascada garantizada en código (lote atómico): borrar completions, desvincular
+  // aportes automáticos (mantienen su valor como ahorro real) y borrar el hábito.
+  await client.batch(
+    [
+      { sql: "DELETE FROM completions WHERE habit_id = ?", args: [id] },
+      { sql: "UPDATE goal_contributions SET habit_id = NULL WHERE habit_id = ?", args: [id] },
+      { sql: "DELETE FROM habits WHERE id = ? AND user_id = ?", args: [id, userId] },
+    ],
+    "write",
+  );
   res.status(204).end();
 });
