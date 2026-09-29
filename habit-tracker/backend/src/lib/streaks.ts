@@ -37,8 +37,8 @@ function isScheduled(schedule: Schedule, d: Date): boolean {
   return true; // "daily" por defecto
 }
 
-export function habitStats(habitId: number, schedule: Schedule): HabitStats {
-  const rows = db.prepare("SELECT date FROM completions WHERE habit_id = ?").all(habitId) as {
+export async function habitStats(habitId: number, schedule: Schedule): Promise<HabitStats> {
+  const rows = (await db.prepare("SELECT date FROM completions WHERE habit_id = ?").all(habitId)) as {
     date: string;
   }[];
   const done = new Set(rows.map((r) => r.date));

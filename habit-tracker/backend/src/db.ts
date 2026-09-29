@@ -1,103 +1,48 @@
-import Database from "better-sqlite3";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { createClient, type Client } from "@libsql/client";
+import { DATABASE_URL, TURSO_AUTH_TOKEN } from "./config.js";
+import { DDL } from "./schema.js";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = process.env.DB_PATH ?? path.join(here, "..", "data.sqlite");
+export const client: Client = createClient({
+  url: DATABASE_URL,
+  authToken: TURSO_AUTH_TOKEN || undefined,
+});
 
-export const db = new Database(dbPath);
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+interface RunResult {
+  changes: number;
+  lastInsertRowid: number;
+}
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
+// Wrapper que imita la API de better-sqlite3 pero asíncrona, para que cada ruta
+// solo cambie a `await db.prepare(...).get/all/run(...)`. Las filas devueltas por
+// libSQL ya permiten acceso por nombre de columna (row.user_id, etc.).
+// `args` se tipifica como any[] para aceptar el rango de InValue de libSQL sin
+// fricción en los ~30 call sites de las rutas (los valores ya se validan arriba).
+export const db = {
+  prepare(sql: string) {
+    return {
+      async get(...args: any[]): Promise<any> {
+        const r = await client.execute({ sql, args });
+        return r.rows.length ? r.rows[0] : undefined;
+      },
+      async all(...args: any[]): Promise<any[]> {
+        const r = await client.execute({ sql, args });
+        return r.rows as any[];
+      },
+      async run(...args: any[]): Promise<RunResult> {
+        const r = await client.execute({ sql, args });
+        return { changes: r.rowsAffected, lastInsertRowid: Number(r.lastInsertRowid ?? 0) };
+      },
+    };
+  },
+};
 
-  CREATE TABLE IF NOT EXISTS habits (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    icon TEXT,
-    color TEXT,
-    schedule_json TEXT NOT NULL DEFAULT '{}',
-    archived INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS completions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
-    date TEXT NOT NULL,
-    UNIQUE(habit_id, date)
-  );
-`);
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS categories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    icon TEXT,
-    type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
-    color TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS debts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    total_cents INTEGER NOT NULL CHECK (total_cents > 0),
-    due_date TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
-    debt_id INTEGER REFERENCES debts(id) ON DELETE SET NULL,
-    type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
-    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
-    note TEXT,
-    date TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS goals (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    icon TEXT,
-    target_cents INTEGER NOT NULL CHECK (target_cents > 0),
-    deadline TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS goal_contributions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
-    habit_id INTEGER REFERENCES habits(id) ON DELETE SET NULL,
-    amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
-    date TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-`);
-
-// Migración idempotente: vínculo hábito↔meta.
-for (const ddl of [
-  "ALTER TABLE habits ADD COLUMN goal_id INTEGER REFERENCES goals(id) ON DELETE SET NULL",
-  "ALTER TABLE habits ADD COLUMN goal_amount_cents INTEGER",
-]) {
-  try {
-    db.exec(ddl);
-  } catch (err) {
-    // Idempotente: la columna ya existe en bases de datos migradas previamente.
-    if (!/duplicate column name/i.test(String(err))) throw err;
+// Idempotente: ignora "duplicate column name" en los ALTER (columnas ya presentes).
+export async function initSchema(): Promise<void> {
+  for (const sql of DDL) {
+    try {
+      await client.execute(sql);
+    } catch (err) {
+      if (!/duplicate column name/i.test(String(err))) throw err;
+    }
   }
 }

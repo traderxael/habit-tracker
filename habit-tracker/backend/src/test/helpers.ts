@@ -3,10 +3,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 
-process.env.DB_PATH = path.join(mkdtempSync(path.join(tmpdir(), "ht-test-")), "test.sqlite");
+const dir = mkdtempSync(path.join(tmpdir(), "ht-test-"));
+process.env.DATABASE_URL = `file:${path.join(dir, "test.db")}`;
 process.env.NODE_ENV = "test";
+process.env.JWT_SECRET = "test-secret";
 
 const { createApp } = await import("../app.js");
+const { initSchema } = await import("../db.js");
+await initSchema();
 
 export const app = createApp();
 
