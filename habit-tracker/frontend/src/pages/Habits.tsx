@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, ApiError } from "../api/client";
-import type { Habit, Schedule } from "../types";
+import { api, ApiError, financeApi } from "../api/client";
+import type { Goal, Habit, Schedule } from "../types";
 import { DAY_LABELS } from "../lib/dates";
 import { DEFAULT_COLOR } from "../lib/colors";
+import { parseAmountToCents } from "../lib/money";
 import { EmptyState } from "../components/EmptyState";
 import { IconPicker } from "../components/IconPicker";
+import { AmountInput } from "../components/AmountInput";
 
 const DEFAULT_DAYS = [1, 2, 3, 4, 5];
 
@@ -19,6 +21,9 @@ export default function HabitsPage() {
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [freq, setFreq] = useState<"daily" | "weekdays">("daily");
   const [days, setDays] = useState<number[]>(DEFAULT_DAYS);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [goalId, setGoalId] = useState("");
+  const [goalAmount, setGoalAmount] = useState("");
 
   async function load() {
     setLoading(true);
@@ -36,6 +41,13 @@ export default function HabitsPage() {
     void load();
   }, []);
 
+  useEffect(() => {
+    financeApi
+      .listGoals()
+      .then((g) => setGoals(g.goals))
+      .catch(() => undefined);
+  }, []);
+
   function resetForm() {
     setEditingId(null);
     setName("");
@@ -43,6 +55,8 @@ export default function HabitsPage() {
     setColor(DEFAULT_COLOR);
     setFreq("daily");
     setDays(DEFAULT_DAYS);
+    setGoalId("");
+    setGoalAmount("");
   }
 
   function startEdit(h: Habit) {
@@ -53,6 +67,8 @@ export default function HabitsPage() {
     const s = h.schedule ?? { type: "daily" };
     setFreq(s.type === "weekdays" ? "weekdays" : "daily");
     setDays(Array.isArray(s.days) && s.days.length ? s.days : DEFAULT_DAYS);
+    setGoalId(h.goalId ? String(h.goalId) : "");
+    setGoalAmount(h.goalAmountCents ? String(h.goalAmountCents / 100) : "");
   }
 
   function buildSchedule(): Schedule {
@@ -68,7 +84,14 @@ export default function HabitsPage() {
       setError("Selecciona al menos un día para la frecuencia semanal.");
       return;
     }
-    const body = { name, icon: icon || null, color, schedule: buildSchedule() };
+    const body = {
+      name,
+      icon: icon || null,
+      color,
+      schedule: buildSchedule(),
+      goal_id: goalId ? Number(goalId) : null,
+      goal_amount_cents: goalId && goalAmount ? parseAmountToCents(goalAmount) : null,
+    };
     try {
       if (editingId) await api.put(`/habits/${editingId}`, body);
       else await api.post("/habits", body);
@@ -139,6 +162,24 @@ export default function HabitsPage() {
             </div>
           )}
         </fieldset>
+        <label>
+          Vincular a meta (opcional)
+          <select value={goalId} onChange={(e) => setGoalId(e.target.value)}>
+            <option value="">Sin meta</option>
+            {goals.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.icon ? `${g.icon} ` : ""}
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {goalId && (
+          <label>
+            Aporte al completarlo
+            <AmountInput id="habit-goal-amount" value={goalAmount} onChange={setGoalAmount} />
+          </label>
+        )}
         <div className="row">
           <button type="submit" className="btn-primary">
             {editingId ? "Guardar cambios" : "Crear hábito"}
