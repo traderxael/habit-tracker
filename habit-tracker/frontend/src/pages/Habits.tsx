@@ -84,13 +84,26 @@ export default function HabitsPage() {
       setError("Selecciona al menos un día para la frecuencia semanal.");
       return;
     }
+    let goalCents: number | null = null;
+    if (goalId) {
+      if (!goalAmount.trim()) {
+        setError("Introduce el importe del aporte para la meta vinculada.");
+        return;
+      }
+      const cents = parseAmountToCents(goalAmount);
+      if (!cents) {
+        setError("Importe del aporte inválido (ej. 50).");
+        return;
+      }
+      goalCents = cents;
+    }
     const body = {
       name,
       icon: icon || null,
       color,
       schedule: buildSchedule(),
       goal_id: goalId ? Number(goalId) : null,
-      goal_amount_cents: goalId && goalAmount ? parseAmountToCents(goalAmount) : null,
+      goal_amount_cents: goalCents,
     };
     try {
       if (editingId) await api.put(`/habits/${editingId}`, body);
