@@ -14,6 +14,10 @@ export default function DebtsPage() {
   const [dueDate, setDueDate] = useState("");
   const [payFor, setPayFor] = useState<number | null>(null);
   const [payAmount, setPayAmount] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editTotal, setEditTotal] = useState("");
+  const [editDue, setEditDue] = useState("");
 
   const load = async () => {
     const d = await financeApi.listDebts();
@@ -67,6 +71,31 @@ export default function DebtsPage() {
     if (!window.confirm(`¿Eliminar "${debt.name}" y sus pagos?`)) return;
     await financeApi.deleteDebt(debt.id);
     await load();
+  }
+
+  function startEdit(d: Debt) {
+    setEditingId(d.id);
+    setEditName(d.name);
+    setEditTotal(String(d.totalCents / 100));
+    setEditDue(d.dueDate ?? "");
+    setPayFor(null);
+  }
+
+  async function onSaveEdit(e: FormEvent, d: Debt) {
+    e.preventDefault();
+    setError(null);
+    const cents = parseAmountToCents(editTotal);
+    if (!cents) {
+      setError("Importe inválido");
+      return;
+    }
+    try {
+      await financeApi.updateDebt(d.id, { name: editName, total_cents: cents, due_date: editDue || null });
+      setEditingId(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al guardar la deuda");
+    }
   }
 
   if (loading) return <p className="muted">Cargando…</p>;
@@ -130,10 +159,35 @@ export default function DebtsPage() {
                   >
                     Registrar pago
                   </button>
+                  <button type="button" className="btn-ghost" onClick={() => startEdit(d)}>
+                    Editar
+                  </button>
                   <button type="button" className="btn-link" onClick={() => onDelete(d)}>
                     Eliminar
                   </button>
                 </div>
+                {editingId === d.id && (
+                  <form onSubmit={(e) => onSaveEdit(e, d)} className="row">
+                    <label>
+                      Nombre
+                      <input value={editName} onChange={(e) => setEditName(e.target.value)} required />
+                    </label>
+                    <label>
+                      Importe total
+                      <AmountInput id={`edit-total-${d.id}`} value={editTotal} onChange={setEditTotal} />
+                    </label>
+                    <label>
+                      Vencimiento
+                      <input type="date" value={editDue} onChange={(e) => setEditDue(e.target.value)} />
+                    </label>
+                    <button type="submit" className="btn-primary">
+                      Guardar
+                    </button>
+                    <button type="button" className="btn-ghost" onClick={() => setEditingId(null)}>
+                      Cancelar
+                    </button>
+                  </form>
+                )}
                 {payFor === d.id && (
                   <form onSubmit={(e) => onPay(e, d)} className="row">
                     <label>
