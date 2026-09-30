@@ -79,10 +79,11 @@ vercel login
 
 1. Entra en [vercel.com/new](https://vercel.com/new) e importa el repo
    `traderxael/habit-tracker`.
-2. Vercel detecta el framework (Vite) y lee `vercel.json` de la raíz (enruta
-   `/api/*` a la función y hace fallback de la SPA). Root directory: la carpeta
-   `habit-tracker` si el repo tiene más cosas; si el repo es solo esta app, déjalo
-   en la raíz.
+2. Vercel detecta el framework (Vite) y lee `vercel.json` de la raíz. Los rewrites
+   actuales enrutanan `/api/(.*)` → la función y TODO lo demás → `/index.html` (sin
+   usar lookahead `(?!…)`, que path-to-regexp de Vercel no soporta). Root directory:
+   la carpeta `habit-tracker` si el repo tiene más cosas; si el repo es solo esta app,
+   déjalo en la raíz.
 3. Añade las **Environment Variables** en *Settings → Environment Variables*
    (Scope: Production, y también Preview si quieres):
 
@@ -169,18 +170,21 @@ datos financieros siempre se piden a la red (no se cachean).
 
 - **`Falta la variable de entorno …`**: en producción faltan `JWT_SECRET` o las de
   Turso. Defínelas en Vercel y redepliega.
-- **La app carga pero las peticiones fallan con error de BD**: no ejecutaste
-  `npm run db:init` contra Turso, o la URL/token son incorrectos.
+- **La app carga pero las peticiones fallan con error de BD**: normalmente la función
+  auto-crea el esquema en el primer arranque. Si persiste, revisa que
+  `TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN` sean correctos; ejecuta `npm run db:init` y
+  `npm run preflight` con esas credenciales para confirmar la conexión real.
 - **Enrutado `/api` en producción** (lo único que solo se confirma con un despliegue
-  real). `vercel.json` enruta `/api/:path*` a la función y hace el fallback SPA con el
-  lookahead `/:path((?!api/).*)`; `api/index.ts` normaliza `req.url` para que Express
-  coincida tanto si Vercel conserva el prefijo `/api` como si lo recorta. Aun así revisa:
-  - **404 en `/api/...`**: el rewrite `/api/:path*` debe ir ANTES que el del fallback
-    (el orden manda). Confirma que la función se montó en `/api`.
-  - **405/500 "no such table"**: falta `npm run db:init` contra la misma
-    `TURSO_DATABASE_URL` (la función es stateless y no crea el esquema).
-  - **La API devuelve HTML en vez de JSON**: el lookahead no excluyó `/api`; revisa el
-    orden de `rewrites` en `vercel.json`.
+  real). `vercel.json` manda `/api/(.*)` → `/api` (la función) ANTES que el fallback
+  SPA `/(.*)` → `/index.html`, y `api/index.ts` reconstruye la ruta: si Vercel recorta
+  el prefijo `/api` o colapsa la URL a `/api`, `resolveUrl` la recupera de la cabecera
+  `x-matched-path`/`x-invoke-path` preservando la query. Aun así revisa:
+  - **404 en `/api/...`**: confirma que el rewrite `/api/(.*)` va ANTES que el del
+    fallback (el orden de `rewrites` manda) y que la función se montó en `/api`.
+  - **405/500 "no such table"**: el auto-init no corrió (credenciales malas); valida
+    con `npm run preflight` y `npm run db:init`.
+  - **La API devuelve HTML en vez de JSON**: el fallback SPA está capturando `/api`;
+    revisa el orden de `rewrites` en `vercel.json`.
 - **No aparece "Añadir a pantalla de inicio"**: la PWA necesita HTTPS (Vercel lo
   da) y que el `manifest`/service worker se sirvan; prueba en Chrome/Edge (iOS
   usa el menú Compartir).
