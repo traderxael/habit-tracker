@@ -71,9 +71,10 @@ const note = (label) => { warn++; console.log("  AVISO " + label); };
     const v = JSON.parse(readFileSync(path.join(here, "..", "..", "vercel.json"), "utf8"));
     const srcs = (v.rewrites || []).map((r) => r.source);
     const apiIdx = srcs.findIndex((s) => s.startsWith("/api"));
-    const spaIdx = srcs.findIndex((s) => s.includes("?!api"));
+    const spaIdx = srcs.findIndex((s) => s === "/(.*)" || s === "/*" || s.includes("?!api"));
     ok(v.outputDirectory === "frontend/dist", "vercel.json outputDirectory = frontend/dist");
     ok(apiIdx !== -1 && spaIdx !== -1 && apiIdx < spaIdx, "vercel.json: rewrite /api ANTES que el fallback SPA");
+    ok(srcs.every((s) => !/\(\?\!/.test(s)), "vercel.json: sin lookahead (?!...) no soportado por path-to-regexp");
     ok(!!(v.functions && v.functions["api/index.ts"]), "vercel.json declara la función api/index.ts");
   } catch (e) { fail++; console.error("  FAIL vercel.json: " + e.message); }
 
