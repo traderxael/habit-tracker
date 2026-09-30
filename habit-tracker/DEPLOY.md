@@ -109,6 +109,19 @@ vercel --prod
 
 La CLI imprime la URL final, p. ej. `https://habit-tracker-<algo>.vercel.app`.
 
+### Antes de publicar (recomendado)
+
+Comprueba que el backend de producción arrancaría bien y que `vercel.json` es
+correcto, sin tocar Turso:
+
+```bash
+cd habit-tracker/backend && npm run build && npm run preflight
+```
+
+Debe terminar en `0 FAIL`. Con tus credenciales reales (`TURSO_DATABASE_URL`,
+`TURSO_AUTH_TOKEN`, `JWT_SECRET`) el pre-flight valida además contra tu base de
+Turso de verdad.
+
 ---
 
 ## 3. Probar y verificar en producción
