@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
-import heroUrl from "../assets/auth-hero.png";
+import heroUrl from "../assets/auth-hero.webp";
 
 export default function LoginPage() {
   const { login, register, user } = useAuth();
