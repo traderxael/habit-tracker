@@ -57,8 +57,12 @@ TURSO_AUTH_TOKEN="<token>" \
 npm run db:init
 ```
 
-Verás `Esquema listo.` Debes repetir este paso **solo** si cambias el esquema en
-el futuro (las funciones serverless no auto-migran).
+Verás `Esquema listo.` Este paso es **recomendado pero opcional**: la función de
+Vercel auto-crea el esquema (DDL idempotente) en su primer arranque en frío, así que
+aunque lo saltes la app funciona. Ejecutar `db:init` por tu cuenta evita el pequeño
+coste de esa primera petición y es el camino preferido. Repítelo si cambias el
+esquema en el futuro (las tablas existentes no se migran solas: `CREATE IF NOT EXISTS`
+no altera columnas ya creadas).
 
 ---
 
