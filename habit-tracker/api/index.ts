@@ -12,31 +12,11 @@
 import type { Request, Response } from "express";
 import { createApp } from "../backend/dist/app.js";
 import { initSchema } from "../backend/dist/db.js";
+import { resolveUrl } from "../backend/dist/http.js";
 
 const app = createApp();
 
 let schemaReady: Promise<void> | null = null;
-
-function resolveUrl(req: Request): string {
-  const raw = req.url ?? "/";
-  const qIdx = raw.indexOf("?");
-  const pathOnly = qIdx >= 0 ? raw.slice(0, qIdx) : raw;
-  const query = qIdx >= 0 ? raw.slice(qIdx) : "";
-
-  // Cabeceras de Vercel que conservan la ruta solicitada original.
-  const fromHeader = (req.headers["x-matched-path"] || req.headers["x-invoke-path"] || "") as string;
-
-  let path = pathOnly;
-  if (pathOnly === "/" || pathOnly === "/api") {
-    // rewrite colapsó la ruta; intenta recuperarla de la cabecera.
-    const h = typeof fromHeader === "string" ? fromHeader.split("?")[0] : "";
-    path = h && h.startsWith("/api") ? h : "/api";
-  } else if (!pathOnly.startsWith("/api")) {
-    // prefijo /api recortado por la plataforma → re-antepón.
-    path = "/api" + pathOnly;
-  }
-  return path + query;
-}
 
 export default async function handler(req: Request, res: Response) {
   if (!schemaReady) schemaReady = initSchema();
