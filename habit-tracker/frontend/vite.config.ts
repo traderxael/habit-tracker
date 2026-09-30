@@ -27,6 +27,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,webp,ico,woff2}"],
         navigateFallback: "/index.html",
+        // No servir el shell de la SPA para rutas /api: una navegación manual a
+        // /api/... debe llegar a la función, no quedar enmascarada por index.html.
+        navigateFallbackDenylist: [/^\/api\//, /^\/api$/],
         runtimeCaching: [
           {
             // Nunca servir datos financieros desde caché: la API siempre va a red.
