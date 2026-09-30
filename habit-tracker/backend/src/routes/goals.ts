@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, client } from "../db.js";
+import { db, batch } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { DATE_RE, isoDay, validAmountCents } from "../lib/money.js";
 
@@ -139,17 +139,14 @@ goalsRouter.delete("/:id", async (req, res) => {
   }
   // Cascada garantizada en código (lote atómico), sin depender del enforcement de
   // FK de Turso: borrar aportes, desvincular hábitos y borrar la meta.
-  await client.batch(
-    [
-      { sql: "DELETE FROM goal_contributions WHERE goal_id = ?", args: [id] },
-      {
-        sql: "UPDATE habits SET goal_id = NULL, goal_amount_cents = NULL WHERE goal_id = ? AND user_id = ?",
-        args: [id, owner],
-      },
-      { sql: "DELETE FROM goals WHERE id = ? AND user_id = ?", args: [id, owner] },
-    ],
-    "write",
-  );
+  await batch([
+    { sql: "DELETE FROM goal_contributions WHERE goal_id = ?", args: [id] },
+    {
+      sql: "UPDATE habits SET goal_id = NULL, goal_amount_cents = NULL WHERE goal_id = ? AND user_id = ?",
+      args: [id, owner],
+    },
+    { sql: "DELETE FROM goals WHERE id = ? AND user_id = ?", args: [id, owner] },
+  ]);
   res.status(204).end();
 });
 

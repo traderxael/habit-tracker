@@ -1,7 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { db, client } from "../db.js";
+import { db, batch } from "../db.js";
 import { JWT_SECRET, TOKEN_TTL } from "../config.js";
 import { requireAuth } from "../middleware/auth.js";
 import { DEFAULT_CATEGORIES } from "../lib/money.js";
@@ -13,7 +13,7 @@ async function seedCategories(userId: number): Promise<void> {
     sql: "INSERT INTO categories (user_id, name, icon, type, color) VALUES (?, ?, ?, ?, ?)",
     args: [userId, c.name, c.icon, c.type, c.color],
   }));
-  await client.batch(stmts, "write");
+  await batch(stmts);
 }
 
 interface UserRow {

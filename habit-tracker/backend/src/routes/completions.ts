@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, client } from "../db.js";
+import { db, batch } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 
 export const completionsRouter = Router();
@@ -66,6 +66,6 @@ completionsRouter.post("/toggle", async (req, res) => {
         args: [userId, habit.goal_id, id, habit.goal_amount_cents, date],
       });
   }
-  await client.batch(stmts, "write");
+  await batch(stmts);
   res.json({ completed, habitId: id, date });
 });
