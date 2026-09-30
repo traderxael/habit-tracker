@@ -110,6 +110,15 @@ La CLI imprime la URL final, p. ej. `https://habit-tracker-<algo>.vercel.app`.
 ## 3. Probar y verificar en producción
 
 - Abre la URL en el navegador. `/api/health` debe responder `{"status":"ok",...}`.
+- Smoke-test automatizado (crea un usuario de prueba efímero; no toca tus datos):
+
+  ```bash
+  node scripts/verify-deploy.mjs https://<tu-app>.vercel.app
+  ```
+
+  Recorre registro → categorías → movimiento → resumen → deuda/meta → aportes →
+  vínculo hábito-meta con toggle (aporte automático) → cascada de borrado. Todo en
+  verde confirma que la función `/api`, Express y **Turso remoto** funcionan juntos.
 - **Regístrate** con un email y contraseña; crea un hábito y márcalo; revisa el
   resumen mensual en Finanzas. Los datos persisten en Turso entre visitas y
   redespliegues.
