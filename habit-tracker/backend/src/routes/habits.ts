@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, client } from "../db.js";
+import { db, batch } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { habitStats, type Schedule } from "../lib/streaks.js";
 
@@ -158,13 +158,10 @@ habitsRouter.delete("/:id", async (req, res) => {
   }
   // Cascada garantizada en código (lote atómico): borrar completions, desvincular
   // aportes automáticos (mantienen su valor como ahorro real) y borrar el hábito.
-  await client.batch(
-    [
-      { sql: "DELETE FROM completions WHERE habit_id = ?", args: [id] },
-      { sql: "UPDATE goal_contributions SET habit_id = NULL WHERE habit_id = ?", args: [id] },
-      { sql: "DELETE FROM habits WHERE id = ? AND user_id = ?", args: [id, userId] },
-    ],
-    "write",
-  );
+  await batch([
+    { sql: "DELETE FROM completions WHERE habit_id = ?", args: [id] },
+    { sql: "UPDATE goal_contributions SET habit_id = NULL WHERE habit_id = ?", args: [id] },
+    { sql: "DELETE FROM habits WHERE id = ? AND user_id = ?", args: [id, userId] },
+  ]);
   res.status(204).end();
 });

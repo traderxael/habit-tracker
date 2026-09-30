@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, client } from "../db.js";
+import { db, batch } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { DATE_RE, isoDay, validAmountCents } from "../lib/money.js";
 
@@ -111,13 +111,10 @@ debtsRouter.delete("/:id", async (req, res) => {
   }
   // Borrar los pagos ANTES que la deuda (lote atómico): el FK es ON DELETE SET
   // NULL y dejaría huérfanos los pagos si se borrara primero la deuda.
-  await client.batch(
-    [
-      { sql: "DELETE FROM transactions WHERE debt_id = ? AND user_id = ?", args: [id, owner] },
-      { sql: "DELETE FROM debts WHERE id = ? AND user_id = ?", args: [id, owner] },
-    ],
-    "write",
-  );
+  await batch([
+    { sql: "DELETE FROM transactions WHERE debt_id = ? AND user_id = ?", args: [id, owner] },
+    { sql: "DELETE FROM debts WHERE id = ? AND user_id = ?", args: [id, owner] },
+  ]);
   res.status(204).end();
 });
 
