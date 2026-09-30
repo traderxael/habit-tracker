@@ -1,8 +1,19 @@
 // Función serverless de Vercel: expone la API Express (solo-API) bajo /api/*.
-// Vercel preserva la URL original (req.url = /api/...), así que los routers de
-// createApp() montados en /api/... coinciden sin reescritura de prefijo.
-// Si en un despliegue real la plataforma recortara el prefijo /api, el fix es
-// re-anteponerlo aquí antes de despachar; se documenta para no re-diagnosticar.
+// vercel.json enruta /api/:path* aquí. Vercel, al despachar una app Express
+// exportada como handler, suele preservar la URL original (/api/...), pero según
+// la versión puede recortar el prefijo de montaje. Normalizamos req.url para que
+// los routers de createApp(), montados en /api/..., coincidan en ambos casos.
+import type { Request, Response } from "express";
 import { createApp } from "../backend/dist/app.js";
 
-export default createApp();
+const app = createApp();
+
+export default function handler(req: Request, res: Response) {
+  const url = req.url ?? "/";
+  if (url === "/" ) {
+    req.url = "/api";
+  } else if (!url.startsWith("/api")) {
+    req.url = "/api" + url;
+  }
+  return app(req, res);
+}
