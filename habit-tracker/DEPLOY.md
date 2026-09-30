@@ -145,8 +145,16 @@ datos financieros siempre se piden a la red (no se cachean).
   Turso. Defínelas en Vercel y redepliega.
 - **La app carga pero las peticiones fallan con error de BD**: no ejecutaste
   `npm run db:init` contra Turso, o la URL/token son incorrectos.
-- **404 en `/api/...`**: el enrutado de Vercel recortó el prefijo; revisa
-  `vercel.json` y que `api/index.ts` default-exporta la app.
+- **Enrutado `/api` en producción** (lo único que solo se confirma con un despliegue
+  real). `vercel.json` enruta `/api/:path*` a la función y hace el fallback SPA con el
+  lookahead `/:path((?!api/).*)`; `api/index.ts` normaliza `req.url` para que Express
+  coincida tanto si Vercel conserva el prefijo `/api` como si lo recorta. Aun así revisa:
+  - **404 en `/api/...`**: el rewrite `/api/:path*` debe ir ANTES que el del fallback
+    (el orden manda). Confirma que la función se montó en `/api`.
+  - **405/500 "no such table"**: falta `npm run db:init` contra la misma
+    `TURSO_DATABASE_URL` (la función es stateless y no crea el esquema).
+  - **La API devuelve HTML en vez de JSON**: el lookahead no excluyó `/api`; revisa el
+    orden de `rewrites` en `vercel.json`.
 - **No aparece "Añadir a pantalla de inicio"**: la PWA necesita HTTPS (Vercel lo
   da) y que el `manifest`/service worker se sirvan; prueba en Chrome/Edge (iOS
   usa el menú Compartir).
