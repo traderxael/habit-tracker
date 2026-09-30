@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: habit-tracker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            habit-tracker/backend/package-lock.json
+            habit-tracker/frontend/package-lock.json
+
+      - name: Install backend
+        run: npm --prefix backend ci
+      - name: Typecheck backend
+        run: npm --prefix backend run typecheck
+      - name: Test backend
+        run: npm --prefix backend test
+      - name: Build backend
+        run: npm --prefix backend run build
+      - name: Preflight (schema + vercel.json)
+        run: node backend/scripts/preflight.mjs
+
+      - name: Install frontend
+        run: npm --prefix frontend ci
+      - name: Typecheck frontend
+        run: npm --prefix frontend run typecheck
+      - name: Test frontend
+        run: npm --prefix frontend test
+      - name: Build frontend (incl. PWA)
+        run: npm --prefix frontend run build
+      - name: Assert PWA artifacts
+        run: |
+          test -f frontend/dist/manifest.webmanifest
+          test -f frontend/dist/sw.js
+          grep -q '"theme_color"' frontend/dist/manifest.webmanifest
