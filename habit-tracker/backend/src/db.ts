@@ -1,6 +1,16 @@
-import { createClient, type Client } from "@libsql/client";
+import type { Client } from "@libsql/client";
 import { DATABASE_URL, TURSO_AUTH_TOKEN } from "./config.js";
 import { DDL } from "./schema.js";
+
+// Driver según la URL:
+//  - Turso remoto (libsql:// | http(s)://) → cliente HTTP puro-JS (@libsql/client/http),
+//    que NO carga el binding nativo `libsql`. Así el despliegue en Vercel (Linux) no
+//    depende de que el binario nativo coincida con la plataforma del runtime.
+//  - Local/Docker/tests (file: | :memory:) → driver embebido (@libsql/client), sí nativo.
+const isRemote = DATABASE_URL.startsWith("libsql://") || /^https?:\/\//.test(DATABASE_URL);
+const { createClient } = isRemote
+  ? await import("@libsql/client/http")
+  : await import("@libsql/client");
 
 export const client: Client = createClient({
   url: DATABASE_URL,
