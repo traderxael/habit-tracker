@@ -147,7 +147,7 @@ Esta imagen es portable a cualquier host que ejecute Docker/OCI (Render, Railway
 
 La ruta gratuita y sin tarjeta usa **Vercel** (frontend estático + la API Express como función serverless) y **Turso** (libSQL remoto, compatible con SQLite). El enrutado, el `init-db` de esquema y las variables de entorno están detallados en [`DEPLOY.md`](./DEPLOY.md). Resumen:
 
-1. Crear una base en Turso y su token; inicializar el esquema una vez: `cd backend && TURSO_DATABASE_URL=… TURSO_AUTH_TOKEN=… npm run db:init`.
+1. Crear una base en Turso y su token; opcionalmente inicializa el esquema (`cd backend && TURSO_DATABASE_URL=… TURSO_AUTH_TOKEN=… npm run db:init`) — si no lo haces, la función lo crea sola en el primer arranque.
 2. Conectar el repo a Vercel (o `vercel`), definir `JWT_SECRET`, `TURSO_DATABASE_URL` y `TURSO_AUTH_TOKEN` como variables de entorno, y `vercel --prod`.
 3. Abrir la URL publicada en el móvil y **instalar la PWA**.
 
