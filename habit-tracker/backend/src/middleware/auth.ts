@@ -15,7 +15,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as unknown as AuthPayload;
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as unknown as AuthPayload;
     req.userId = payload.sub;
     req.userEmail = payload.email;
     next();

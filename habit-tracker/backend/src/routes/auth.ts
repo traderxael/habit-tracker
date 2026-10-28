@@ -25,6 +25,7 @@ interface UserRow {
 
 function sign(user: { id: number; email: string }): string {
   return jwt.sign({ sub: user.id, email: user.email }, JWT_SECRET, {
+    algorithm: "HS256",
     expiresIn: TOKEN_TTL,
   } as jwt.SignOptions);
 }
